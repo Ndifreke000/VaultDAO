@@ -248,7 +248,7 @@ impl VaultDAO {
         let approval_count = proposal.approvals.len();
         if approval_count >= config.threshold {
             proposal.status = ProposalStatus::Approved;
-            
+
             // Check for Timelock
             if proposal.amount >= config.timelock_threshold {
                 let current_ledger = env.ledger().sequence() as u64;
@@ -287,7 +287,11 @@ impl VaultDAO {
     /// # Arguments
     /// * `executor` - The address triggering the final transfer (must authorize).
     /// * `proposal_id` - ID of the proposal to execute.
-    pub fn execute_proposal(env: Env, executor: Address, proposal_id: u64) -> Result<(), VaultError> {
+    pub fn execute_proposal(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+    ) -> Result<(), VaultError> {
         // Executor must authorize (to prevent griefing)
         executor.require_auth();
 
@@ -344,7 +348,11 @@ impl VaultDAO {
     /// Reject a pending proposal
     ///
     /// Only Admin or the original proposer can reject.
-    pub fn reject_proposal(env: Env, rejector: Address, proposal_id: u64) -> Result<(), VaultError> {
+    pub fn reject_proposal(
+        env: Env,
+        rejector: Address,
+        proposal_id: u64,
+    ) -> Result<(), VaultError> {
         rejector.require_auth();
 
         let mut proposal = storage::get_proposal(&env, proposal_id)?;
@@ -376,7 +384,12 @@ impl VaultDAO {
     /// Set role for an address
     ///
     /// Only Admin can assign roles.
-    pub fn set_role(env: Env, admin: Address, target: Address, role: Role) -> Result<(), VaultError> {
+    pub fn set_role(
+        env: Env,
+        admin: Address,
+        target: Address,
+        role: Role,
+    ) -> Result<(), VaultError> {
         admin.require_auth();
 
         let caller_role = storage::get_role(&env, &admin);
@@ -548,7 +561,7 @@ impl VaultDAO {
         if amount <= 0 {
             return Err(VaultError::InvalidAmount);
         }
-        
+
         // Minimum interval check (e.g. 1 hour = 720 ledgers)
         if interval < 720 {
             return Err(VaultError::IntervalTooShort);
@@ -571,9 +584,9 @@ impl VaultDAO {
         };
 
         storage::set_recurring_payment(&env, &payment);
-        
+
         // Use a generic event or add a specific one (skipping specific event for brevity/limit)
-        
+
         Ok(id)
     }
 
@@ -595,7 +608,7 @@ impl VaultDAO {
         // Check spending limits (Daily & Weekly)
         // Note: Recurring payments count towards limits!
         let config = storage::get_config(&env)?;
-        
+
         let today = storage::get_day_number(&env);
         let spent_today = storage::get_daily_spent(&env, today);
         if spent_today + payment.amount > config.daily_limit {
@@ -614,7 +627,7 @@ impl VaultDAO {
             return Err(VaultError::InsufficientBalance);
         }
 
-        // Execute 
+        // Execute
         token::transfer(&env, &payment.token, &payment.recipient, payment.amount);
 
         // Update limits

@@ -1,8 +1,11 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{testutils::{Address as _, Ledger}, Vec, Env, Symbol};
 use crate::{VaultDAO, VaultDAOClient};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    Env, Symbol, Vec,
+};
 
 #[test]
 fn test_multisig_approval() {
@@ -25,14 +28,12 @@ fn test_multisig_approval() {
 
     // Initialize with 2-of-3 multisig
     client.initialize(
-        &admin,
-        &signers,
-        &2,          // threshold
-        &1000,       // spending_limit
-        &5000,       // daily_limit
-        &10000,      // weekly_limit
-        &500,        // timelock_threshold
-        &100,        // timelock_delay
+        &admin, &signers, &2,     // threshold
+        &1000,  // spending_limit
+        &5000,  // daily_limit
+        &10000, // weekly_limit
+        &500,   // timelock_threshold
+        &100,   // timelock_delay
     );
 
     // Treasurer roles
@@ -40,17 +41,12 @@ fn test_multisig_approval() {
     client.set_role(&admin, &signer2, &Role::Treasurer);
 
     // 1. Propose transfer
-    let proposal_id = client.propose_transfer(
-        &signer1,
-        &user,
-        &token,
-        &100,
-        &Symbol::new(&env, "test"),
-    );
+    let proposal_id =
+        client.propose_transfer(&signer1, &user, &token, &100, &Symbol::new(&env, "test"));
 
     // 2. First approval (signer1)
     client.approve_proposal(&signer1, &proposal_id);
-    
+
     // Check status: Still Pending
     let proposal = client.get_proposal(&proposal_id);
     assert_eq!(proposal.status, ProposalStatus::Pending);
@@ -79,20 +75,11 @@ fn test_unauthorized_proposal() {
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
 
-    client.initialize(
-        &admin,
-        &signers,
-        &1, &1000, &5000, &10000, &500, &100
-    );
+    client.initialize(&admin, &signers, &1, &1000, &5000, &10000, &500, &100);
 
     // Member tries to propose
-    let res = client.try_propose_transfer(
-        &member,
-        &member,
-        &token,
-        &100,
-        &Symbol::new(&env, "fail"),
-    );
+    let res =
+        client.try_propose_transfer(&member, &member, &token, &100, &Symbol::new(&env, "fail"));
 
     assert!(res.is_err());
     assert_eq!(res.err(), Some(Ok(VaultError::InsufficientRole)));
@@ -120,26 +107,19 @@ fn test_timelock_violation() {
 
     // Initialize with low timelock threshold
     client.initialize(
-        &admin,
-        &signers,
-        &1,          // threshold
-        &2000,       // spending_limit
-        &5000,       // daily_limit
-        &10000,      // weekly_limit
-        &500,        // timelock_threshold (500)
-        &200,        // timelock_delay (200 ledgers)
+        &admin, &signers, &1,     // threshold
+        &2000,  // spending_limit
+        &5000,  // daily_limit
+        &10000, // weekly_limit
+        &500,   // timelock_threshold (500)
+        &200,   // timelock_delay (200 ledgers)
     );
 
     client.set_role(&admin, &signer1, &Role::Treasurer);
 
     // 1. Propose large transfer (600 > 500)
-    let proposal_id = client.propose_transfer(
-        &signer1,
-        &user,
-        &token,
-        &600,
-        &Symbol::new(&env, "large"),
-    );
+    let proposal_id =
+        client.propose_transfer(&signer1, &user, &token, &600, &Symbol::new(&env, "large"));
 
     // 2. Approve -> Should trigger timelock
     client.approve_proposal(&signer1, &proposal_id);
@@ -154,7 +134,7 @@ fn test_timelock_violation() {
 
     // 4. Advance time past unlock (Ledger 301)
     env.ledger().set_sequence_number(301);
-    
+
     // Note: This execution will fail with InsufficientBalance/TransferFailed unless we mock the token,
     // but we just want to verify we pass the timelock check.
     // In this mock, we haven't set up the token contract balance, so it will fail there.
