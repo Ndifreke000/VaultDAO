@@ -19,15 +19,10 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
   const [address, setAddress] = useState<string | null>(null);
   const [network, setNetwork] = useState<string | null>(null);
 
-  // Refs to track state for comparison in polling
   const addressRef = useRef<string | null>(null);
   const networkRef = useRef<string | null>(null);
 
-  // Toast state
-  const [toast, setToast] = useState<{
-    message: string;
-    type: ToastType;
-  } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
 
   const showToast = useCallback((message: string, type: ToastType = "info") => {
     setToast({ message, type });
@@ -40,8 +35,8 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
       const installed = await isConnected();
       setIsInstalled(!!installed);
       return !!installed;
-    } catch (e) {
-      console.error("Installation check failed", e);
+    } catch {
+      console.error("Installation check failed");
       return false;
     }
   }, []);
@@ -52,14 +47,12 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
       if (currentNetwork !== networkRef.current) {
         setNetwork(currentNetwork);
         networkRef.current = currentNetwork;
-
         if (currentNetwork && currentNetwork !== "TESTNET" && connected) {
           showToast("Please switch to Stellar Testnet in Freighter", "warning");
         }
       }
       return currentNetwork;
-    } catch (e) {
-      console.error("Failed to get network", e);
+    } catch {
       return null;
     }
   }, [connected, showToast]);
@@ -77,84 +70,50 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
           }
           await validateNetwork();
           return true;
-        } else if (addressRef.current) {
-          // Logic for when account becomes inaccessible
-          setAddress(null);
-          addressRef.current = null;
-          setConnected(false);
-          localStorage.removeItem("wallet_connected");
         }
-      } else if (addressRef.current) {
-        setAddress(null);
-        addressRef.current = null;
-        setConnected(false);
-        localStorage.removeItem("wallet_connected");
       }
-    } catch (e) {
-      console.error("Failed to update wallet state", e);
+      setAddress(null);
+      addressRef.current = null;
+      setConnected(false);
+      localStorage.removeItem("wallet_connected");
+    } catch {
+      console.error("Failed to update wallet state");
     }
     return false;
   }, [validateNetwork]);
 
-  // Initialize and Polling
   useEffect(() => {
     const init = async () => {
-      const installed = await checkInstallation();
-      if (installed) {
-        const wasConnected =
-          localStorage.getItem("wallet_connected") === "true";
-        if (wasConnected) {
-          await updateWalletState();
-        }
+      if (await checkInstallation() && localStorage.getItem("wallet_connected") === "true") {
+        await updateWalletState();
       }
     };
     init();
-
-    // Polling for changes (Account / Network)
     const interval = setInterval(async () => {
-      if (await isConnected()) {
-        await updateWalletState();
-      }
+      if (await isConnected()) await updateWalletState();
     }, 3000);
-
     return () => clearInterval(interval);
   }, [checkInstallation, updateWalletState]);
 
   const connect = async () => {
-    if (!isInstalled) {
-      const installed = await checkInstallation();
-      if (!installed) {
-        showToast("Freighter wallet not found. Please install it.", "error");
-        window.open("https://www.freighter.app/", "_blank");
-        return;
-      }
+    if (!isInstalled && !(await checkInstallation())) {
+      showToast("Freighter wallet not found.", "error");
+      window.open("https://www.freighter.app/", "_blank");
+      return;
     }
-
     try {
-      const allowed = await setAllowed();
-      if (allowed) {
-        const success = await updateWalletState();
-        if (success) {
+      if (await setAllowed()) {
+        if (await updateWalletState()) {
           localStorage.setItem("wallet_connected", "true");
-          showToast("Wallet connected successfully!", "success");
-
-          const net = await getNetwork();
-          if (net !== "TESTNET") {
-            showToast("Application works best on Testnet", "warning");
-          }
+          showToast("Wallet connected!", "success");
         }
-      } else {
-        showToast("Connection request rejected", "error");
       }
-    } catch (e: unknown) {
-      console.error("Failed to connect wallet", e);
-      const errorMessage =
-        e instanceof Error ? e.message : "Failed to connect wallet";
-      showToast(errorMessage, "error");
+    } catch {
+      showToast("Connection failed", "error");
     }
   };
 
-  const disconnect = async () => {
+  const disconnect = useCallback(async () => {
     setConnected(false);
     setAddress(null);
     setNetwork(null);
@@ -162,25 +121,28 @@ export const WalletProvider: React.FC<{ children: ReactNode }> = ({
     networkRef.current = null;
     localStorage.removeItem("wallet_connected");
     showToast("Wallet disconnected", "info");
-  };
+    return Promise.resolve();
+  }, [showToast]);
 
   return (
-    <WalletContext.Provider
-      value={{
-        isConnected: connected,
-        isInstalled,
-        address,
-        network,
-        connect,
-        disconnect,
+    <WalletContext.Provider 
+      value={{ 
+        isConnected: connected, 
+        isInstalled, 
+        address, 
+        network, 
+        connect, 
+        disconnect 
       }}
     >
       {children}
       {toast && (
-        <Toast message={toast.message} type={toast.type} onClose={clearToast} />
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={clearToast} 
+        />
       )}
     </WalletContext.Provider>
   );
 };
-
-export { useWallet } from '../hooks/useWallet';

@@ -1,8 +1,21 @@
 /**
  * Export analytics data as CSV and charts as images.
  */
-
 import type { AggregatedAnalytics } from '../types/analytics';
+
+// Define internal interfaces to match the analytics data structure
+interface LocalProposalTrend {
+  date: string;
+  created: number;
+  approved: number;
+  executed: number;
+}
+
+interface LocalSpendingByToken {
+  name: string;
+  value: number;
+  count?: number;
+}
 
 function escapeCsvCell(value: string | number): string {
   const s = String(value);
@@ -15,14 +28,17 @@ export function exportAnalyticsToCsv(analytics: AggregatedAnalytics, filename = 
 
   rows.push(['Proposal trends', '']);
   rows.push(['Date', 'Created', 'Approved', 'Executed']);
-  analytics.proposalTrends.forEach((p: any) => {
+  
+  // Cast via unknown to local interface to satisfy linter and ensure type safety
+  (analytics.proposalTrends as unknown as LocalProposalTrend[]).forEach((p) => {
     rows.push([p.date, String(p.created), String(p.approved), String(p.executed)]);
   });
   rows.push([]);
 
   rows.push(['Spending by token', '']);
   rows.push(['Token', 'Value', 'Count']);
-  analytics.spendingByToken.forEach((s: any) => {
+  
+  (analytics.spendingByToken as unknown as LocalSpendingByToken[]).forEach((s) => {
     rows.push([s.name, String(s.value), String(s.count ?? 0)]);
   });
   rows.push([]);
@@ -46,7 +62,7 @@ export function exportAnalyticsToCsv(analytics: AggregatedAnalytics, filename = 
 }
 
 /**
- * Export a chart container element as PNG. Pass the ref.current of the wrapper div.
+ * Export a chart container element as PNG.
  */
 export function exportChartAsImage(containerEl: HTMLElement | null, filename = 'chart.png'): void {
   if (!containerEl) return;
