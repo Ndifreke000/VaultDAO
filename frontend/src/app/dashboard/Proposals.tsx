@@ -16,7 +16,7 @@ interface Proposal {
     amount: string;
     token: string;
     memo: string;
-    status: ProposalStatus;
+    status: 'Pending' | 'Approved' | 'Executed' | 'Rejected' | 'Expired';
     approvals: number;
     threshold: number;
     createdAt: string;
@@ -192,7 +192,7 @@ const Proposals: React.FC = () => {
         }
     };
 
-        const handleRejectCancel = () => {
+    const handleRejectCancel = () => {
         setShowRejectModal(false);
         setRejectingId(null);
     };
@@ -411,7 +411,7 @@ const Proposals: React.FC = () => {
                 title="Reject Proposal"
                 message="Are you sure you want to reject this? This action is permanent."
                 onConfirm={handleRejectConfirm}
-                onCancel={() => setShowRejectModal(false)}
+                onCancel={handleRejectCancel}
                 showReasonInput={true}
                 isDestructive={true}
             />
