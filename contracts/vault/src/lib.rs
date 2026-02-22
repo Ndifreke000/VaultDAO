@@ -16,7 +16,7 @@ pub use types::InitConfig;
 
 use errors::VaultError;
 use soroban_sdk::{contract, contractimpl, Address, Env, Symbol, Vec};
-use types::{Config, Proposal, ProposalStatus, Role};
+use types::{Config, Priority, Proposal, ProposalStatus, Role};
 
 /// The main contract structure for VaultDAO.
 ///
@@ -113,6 +113,7 @@ impl VaultDAO {
         token_addr: Address,
         amount: i128,
         memo: Symbol,
+        priority: Priority,
     ) -> Result<u64, VaultError> {
         // Verify identity
         proposer.require_auth();
@@ -167,12 +168,14 @@ impl VaultDAO {
             memo,
             approvals: Vec::new(&env),
             status: ProposalStatus::Pending,
+            priority: priority.clone(),
             created_at: current_ledger,
             expires_at: current_ledger + PROPOSAL_EXPIRY_LEDGERS,
             unlock_ledger: 0,
         };
 
         storage::set_proposal(&env, &proposal);
+        storage::add_to_priority_queue(&env, priority as u32, proposal_id);
         storage::extend_instance_ttl(&env);
 
         // Emit event
@@ -317,6 +320,7 @@ impl VaultDAO {
         // Update proposal status
         proposal.status = ProposalStatus::Executed;
         storage::set_proposal(&env, &proposal);
+        storage::remove_from_priority_queue(&env, proposal.priority as u32, proposal_id);
         storage::extend_instance_ttl(&env);
 
         // Emit event
@@ -355,6 +359,7 @@ impl VaultDAO {
 
         proposal.status = ProposalStatus::Rejected;
         storage::set_proposal(&env, &proposal);
+        storage::remove_from_priority_queue(&env, proposal.priority as u32, proposal_id);
 
         // Note: Daily spending is NOT refunded to prevent gaming
 
@@ -632,6 +637,44 @@ impl VaultDAO {
     /// Get proposal by ID
     pub fn get_proposal(env: Env, proposal_id: u64) -> Result<Proposal, VaultError> {
         storage::get_proposal(&env, proposal_id)
+    }
+
+    /// Get proposals by priority level
+    pub fn get_proposals_by_priority(env: Env, priority: Priority) -> soroban_sdk::Vec<u64> {
+        storage::get_proposals_by_priority(&env, priority as u32)
+    }
+
+    /// Change priority of a proposal (Admin only)
+    pub fn change_priority(
+        env: Env,
+        admin: Address,
+        proposal_id: u64,
+        new_priority: Priority,
+    ) -> Result<(), VaultError> {
+        admin.require_auth();
+
+        let role = storage::get_role(&env, &admin);
+        if role != Role::Admin {
+            return Err(VaultError::Unauthorized);
+        }
+
+        let mut proposal = storage::get_proposal(&env, proposal_id)?;
+
+        if proposal.status == ProposalStatus::Executed
+            || proposal.status == ProposalStatus::Rejected
+        {
+            return Err(VaultError::ProposalNotPending);
+        }
+
+        let old_priority = proposal.priority.clone();
+        storage::remove_from_priority_queue(&env, old_priority as u32, proposal_id);
+
+        proposal.priority = new_priority.clone();
+        storage::set_proposal(&env, &proposal);
+        storage::add_to_priority_queue(&env, new_priority as u32, proposal_id);
+        storage::extend_instance_ttl(&env);
+
+        Ok(())
     }
 
     /// Get role for an address
