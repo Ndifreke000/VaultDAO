@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { LayoutDashboard, FileText, CheckCircle, Wallet, Loader2 } from 'lucide-react';
+import { LayoutDashboard, FileText, CheckCircle, Wallet, Loader2, RefreshCw } from 'lucide-react';
 import StatCard from '../../components/Layout/StatCard';
 import { useVaultContract } from '../../hooks/useVaultContract';
 import { getAllTemplates, getMostUsedTemplates } from '../../utils/templates';
+import { formatTokenAmount } from '../../utils/formatters';
 
 interface DashboardStats {
     totalBalance: string;
@@ -15,8 +16,12 @@ interface DashboardStats {
 }
 
 const Overview: React.FC = () => {
-    const { getDashboardStats, loading } = useVaultContract();
+    const { getDashboardStats, getVaultBalance, loading } = useVaultContract();
     const [stats, setStats] = useState<DashboardStats | null>(null);
+    const [balance, setBalance] = useState<string>('0');
+    const [balanceLoading, setBalanceLoading] = useState(false);
+    const [balanceError, setBalanceError] = useState<string | null>(null);
+    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
     const quickActionTemplates = (() => {
         const mostUsed = getMostUsedTemplates(3);
@@ -25,6 +30,21 @@ const Overview: React.FC = () => {
         }
         return getAllTemplates().slice(0, 3);
     })();
+
+    const fetchBalance = async () => {
+        setBalanceLoading(true);
+        setBalanceError(null);
+        try {
+            const balanceInStroops = await getVaultBalance();
+            setBalance(balanceInStroops);
+            setLastUpdated(new Date());
+        } catch (error) {
+            console.error('Failed to fetch balance:', error);
+            setBalanceError('Failed to load balance');
+        } finally {
+            setBalanceLoading(false);
+        }
+    };
 
     useEffect(() => {
         let isMounted = true;
@@ -39,6 +59,7 @@ const Overview: React.FC = () => {
             }
         };
         fetchData();
+        fetchBalance();
         return () => {
             isMounted = false;
         };
@@ -63,6 +84,50 @@ const Overview: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="md:col-span-2 lg:col-span-1">
+                    <div className="bg-gradient-to-br from-purple-600 to-purple-800 rounded-xl border border-purple-500 p-6 h-full">
+                        <div className="flex items-start justify-between mb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="p-3 bg-white/10 rounded-lg">
+                                    <Wallet className="h-6 w-6 text-white" />
+                                </div>
+                                <div>
+                                    <p className="text-sm text-purple-200">Vault Balance</p>
+                                    <p className="text-xs text-purple-300 mt-0.5">
+                                        {lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Loading...'}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={fetchBalance}
+                                disabled={balanceLoading}
+                                className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                                title="Refresh balance"
+                            >
+                                <RefreshCw className={`h-5 w-5 text-white ${balanceLoading ? 'animate-spin' : ''}`} />
+                            </button>
+                        </div>
+                        {balanceError ? (
+                            <div className="text-center py-4">
+                                <p className="text-red-300 text-sm mb-2">{balanceError}</p>
+                                <button
+                                    onClick={fetchBalance}
+                                    className="text-xs text-white underline hover:no-underline"
+                                >
+                                    Retry
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="text-3xl md:text-4xl font-bold text-white">
+                                {balanceLoading ? (
+                                    <Loader2 className="h-8 w-8 animate-spin" />
+                                ) : (
+                                    formatTokenAmount(balance)
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
                 <StatCard
                     title="Vault Balance"
                     value={`${stats?.totalBalance || '0'} XLM`}

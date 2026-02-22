@@ -427,5 +427,22 @@ export const useVaultContract = () => {
         }
     };
 
-    return { proposeTransfer, rejectProposal, executeProposal, getDashboardStats, getVaultEvents, getAllRoles, setRole, getUserRole, loading };
+    const getVaultBalance = async (tokenAddress?: string): Promise<string> => {
+        try {
+            const contractAddress = tokenAddress || CONTRACT_ID;
+            const accountInfo = await server.getAccount(contractAddress) as unknown as { balances: StellarBalance[] };
+            const nativeBalance = accountInfo.balances.find((b: StellarBalance) => b.asset_type === 'native');
+            
+            if (!nativeBalance) return '0';
+            
+            // Convert to stroops (1 XLM = 10,000,000 stroops)
+            const stroops = Math.floor(parseFloat(nativeBalance.balance) * 10_000_000);
+            return stroops.toString();
+        } catch (e) {
+            console.error('Failed to fetch vault balance:', e);
+            return '0';
+        }
+    };
+
+    return { proposeTransfer, rejectProposal, executeProposal, getDashboardStats, getVaultEvents, getAllRoles, setRole, getUserRole, getVaultBalance, loading };
 };
