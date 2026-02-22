@@ -103,6 +103,8 @@ pub struct Proposal {
     pub memo: Symbol,
     /// Addresses that have approved
     pub approvals: Vec<Address>,
+    /// Addresses that have abstained
+    pub abstentions: Vec<Address>,
     /// Current status
     pub status: ProposalStatus,
     /// Priority level

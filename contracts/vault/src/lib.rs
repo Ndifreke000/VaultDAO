@@ -167,6 +167,7 @@ impl VaultDAO {
             amount,
             memo,
             approvals: Vec::new(&env),
+            abstentions: Vec::new(&env),
             status: ProposalStatus::Pending,
             priority: priority.clone(),
             created_at: current_ledger,
@@ -230,6 +231,11 @@ impl VaultDAO {
             return Err(VaultError::AlreadyApproved);
         }
 
+        // Prevent voting after abstaining
+        if proposal.abstentions.contains(&signer) {
+            return Err(VaultError::AlreadyApproved);
+        }
+
         // Add approval
         proposal.approvals.push_back(signer.clone());
 
@@ -261,6 +267,57 @@ impl VaultDAO {
             approval_count,
             config.threshold,
         );
+
+        Ok(())
+    }
+
+    /// Abstain from a pending proposal.
+    ///
+    /// Allows a signer to abstain from voting, counting toward quorum but not threshold.
+    pub fn abstain_from_proposal(
+        env: Env,
+        signer: Address,
+        proposal_id: u64,
+    ) -> Result<(), VaultError> {
+        signer.require_auth();
+
+        let config = storage::get_config(&env)?;
+        if !config.signers.contains(&signer) {
+            return Err(VaultError::NotASigner);
+        }
+
+        let role = storage::get_role(&env, &signer);
+        if role != Role::Treasurer && role != Role::Admin {
+            return Err(VaultError::InsufficientRole);
+        }
+
+        let mut proposal = storage::get_proposal(&env, proposal_id)?;
+
+        if proposal.status != ProposalStatus::Pending {
+            return Err(VaultError::ProposalNotPending);
+        }
+
+        let current_ledger = env.ledger().sequence() as u64;
+        if current_ledger > proposal.expires_at {
+            proposal.status = ProposalStatus::Expired;
+            storage::set_proposal(&env, &proposal);
+            return Err(VaultError::ProposalExpired);
+        }
+
+        if proposal.abstentions.contains(&signer) {
+            return Err(VaultError::AlreadyApproved);
+        }
+
+        if proposal.approvals.contains(&signer) {
+            return Err(VaultError::AlreadyApproved);
+        }
+
+        proposal.abstentions.push_back(signer.clone());
+
+        storage::set_proposal(&env, &proposal);
+        storage::extend_instance_ttl(&env);
+
+        events::emit_proposal_abstained(&env, proposal_id, &signer, proposal.abstentions.len());
 
         Ok(())
     }
